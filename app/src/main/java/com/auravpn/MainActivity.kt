@@ -29,6 +29,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auravpn.ui.theme.AuraColors
 import com.auravpn.ui.theme.AuraTheme
+import com.auravpn.ui.ProfileImportDialog
+import com.auravpn.profile.ProfileStore
+import com.auravpn.profile.StoredProfile
+import androidx.compose.ui.platform.LocalContext
 
 private enum class AuraTab(val title: String, val icon: ImageVector) {
     HOME("خانه", Icons.Filled.Home),
@@ -47,6 +51,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AuraRoot() {
     var selectedTab by remember { mutableStateOf(AuraTab.HOME) }
+    val context = LocalContext.current
+    val store = remember { ProfileStore(context) }
+    var profiles by remember { mutableStateOf(store.list()) }
+    var showImport by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
 
@@ -55,6 +63,15 @@ private fun AuraRoot() {
             snackbar.showSnackbar(it)
             notice = null
         }
+    }
+
+    if (showImport) {
+        ProfileImportDialog(onDismiss = { showImport = false }, onImport = { input ->
+            val result = store.import(input)
+            profiles = store.list()
+            showImport = false
+            notice = result.error ?: "افزوده شد: ${result.added} | تکراری: ${result.duplicates}"
+        })
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -73,7 +90,7 @@ private fun AuraRoot() {
             ) {
                 when (selectedTab) {
                     AuraTab.HOME -> HomeScreen(onConnect = { notice = "اتصال واقعی در فاز هسته VPN پیاده‌سازی می‌شود." }, onServers = { selectedTab = AuraTab.SERVERS })
-                    AuraTab.SERVERS -> ServersScreen(onImport = { notice = "ورود کانفیگ در فاز پردازش پروفایل اضافه می‌شود." })
+                    AuraTab.SERVERS -> ServersScreen(profiles = profiles, onImport = { showImport = true }, onDelete = { id -> store.delete(id); profiles = store.list() })
                     AuraTab.ROUTING -> RoutingScreen(onNotice = { notice = it })
                     AuraTab.SETTINGS -> SettingsScreen(onNotice = { notice = it })
                 }
@@ -222,7 +239,7 @@ private fun MetricCard(title: String, value: String, icon: ImageVector, modifier
 }
 
 @Composable
-private fun ServersScreen(onImport: () -> Unit) {
+private fun ServersScreen(profiles: List<StoredProfile>, onImport: () -> Unit, onDelete: (String) -> Unit) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         AuraHeader("سرورها", "مدیریت پروفایل‌ها و اشتراک‌ها")
         OutlinedTextField(
@@ -239,7 +256,20 @@ private fun ServersScreen(onImport: () -> Unit) {
                 unfocusedContainerColor = AuraColors.Surface
             )
         )
-        Surface(color = AuraColors.Surface, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, Color(0xFF293957))) {
+        if (profiles.isNotEmpty()) {
+            profiles.forEach { profile ->
+                Surface(color = AuraColors.Surface, shape = RoundedCornerShape(16.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(profile.name, color = AuraColors.TextPrimary)
+                            Text(profile.protocol.uppercase(), color = AuraColors.TextSecondary, fontSize = 11.sp)
+                        }
+                        IconButton(onClick = { onDelete(profile.id) }) { Icon(Icons.Filled.Delete, contentDescription = "حذف پروفایل", tint = AuraColors.Error) }
+                    }
+                }
+            }
+            Button(onClick = onImport) { Text("افزودن پروفایل") }
+        } else Surface(color = AuraColors.Surface, shape = RoundedCornerShape(20.dp), border = BorderStroke(1.dp, Color(0xFF293957))) {
             Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Filled.Dns, contentDescription = null, tint = AuraColors.Primary, modifier = Modifier.size(42.dp))
                 Text("هنوز سروری اضافه نشده", color = AuraColors.TextPrimary, fontWeight = FontWeight.SemiBold)
