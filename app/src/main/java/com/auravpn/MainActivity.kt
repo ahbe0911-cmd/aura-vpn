@@ -15,37 +15,43 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.auravpn.ui.theme.AuraColors
+import com.auravpn.ui.theme.AuraTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { AuraApp() }
+        setContent { AuraTheme { AuraFoundationScreen() } }
     }
 }
 
 @Composable
-private fun AuraApp() {
-    val navy = Color(0xFF0B1020)
-    Surface(color = navy, modifier = Modifier.fillMaxSize()) {
+private fun AuraFoundationScreen() {
+    Surface(color = AuraColors.Background, modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(navy, Color(0xFF151D3B))))
+                .background(Brush.verticalGradient(listOf(AuraColors.Background, AuraColors.BackgroundEnd)))
                 .padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("AURA", color = Color(0xFFF4F7FF), fontSize = 34.sp, fontWeight = FontWeight.Bold)
-            Text("VPN", color = Color(0xFF42C8F5), fontSize = 15.sp, letterSpacing = 5.sp)
+            Text("AURA", color = AuraColors.TextPrimary, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+            Text("VPN", color = AuraColors.Primary, fontSize = 14.sp, letterSpacing = 6.sp)
             Text(
-                "Foundation build · VPN engine not connected",
-                color = Color(0xFF9AA8C7),
+                "زیرساخت اولیه آماده است",
+                color = AuraColors.TextPrimary,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 28.dp)
+            )
+            Text(
+                "هسته اتصال هنوز پیاده‌سازی نشده است",
+                color = AuraColors.TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 20.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }
