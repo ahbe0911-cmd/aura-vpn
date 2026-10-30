@@ -1,6 +1,10 @@
 package com.auravpn
 
 import android.os.Bundle
+import android.app.Activity
+import android.net.VpnService
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.animateColorAsState
@@ -69,6 +73,11 @@ private fun AuraRoot() {
     var showImport by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
+    var vpnPermissionGranted by remember { mutableStateOf(VpnService.prepare(context) == null) }
+    val vpnPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        vpnPermissionGranted = result.resultCode == Activity.RESULT_OK && VpnService.prepare(context) == null
+        notice = if (vpnPermissionGranted) "مجوز VPN تأیید شد؛ موتور اتصال هنوز نصب نشده است." else "مجوز VPN تأیید نشد."
+    }
 
     LaunchedEffect(notice) {
         notice?.let {
@@ -110,7 +119,19 @@ private fun AuraRoot() {
                     .padding(padding)
             ) {
                 when (selectedTab) {
-                    AuraTab.HOME -> HomeScreen(onConnect = { notice = "اتصال واقعی در فاز هسته VPN پیاده‌سازی می‌شود." }, onServers = { selectedTab = AuraTab.SERVERS })
+                    AuraTab.HOME -> HomeScreen(onConnect = {
+                        if (store.selected() == null) {
+                            notice = "ابتدا از بخش سرورها یک پروفایل انتخاب کنید."
+                            selectedTab = AuraTab.SERVERS
+                        } else {
+                            val permissionIntent = VpnService.prepare(context)
+                            if (permissionIntent != null) vpnPermissionLauncher.launch(permissionIntent)
+                            else {
+                                vpnPermissionGranted = true
+                                notice = "مجوز VPN آماده است؛ اتصال واقعی هنوز پیاده‌سازی نشده است."
+                            }
+                        }
+                    }, onServers = { selectedTab = AuraTab.SERVERS })
                     AuraTab.SERVERS -> ServersScreen(profiles = profiles, selectedId = selectedProfileId, onSelect = { id -> if (store.select(id)) { selectedProfileId = id; notice = "سرور انتخاب شد؛ اتصال VPN هنوز فعال نیست." } }, onImport = { showImport = true }, onDelete = { id -> store.delete(id); profiles = store.list(); selectedProfileId = store.selectedId() }, sources = sources, refreshing = refreshing, onAddSource = { showSubscriptionDialog = true }, onRemoveSource = { url -> subscriptions.remove(url); sources = subscriptions.list() }, onRefreshSource = { url -> if (!refreshing) { refreshing = true; scope.launch { try { val content = withContext(Dispatchers.IO) { subscriptions.fetch(url) }; val result = withContext(Dispatchers.IO) { store.import(content) }; if (result.error != null) notice = result.error else { subscriptions.markUpdated(url); sources = subscriptions.list(); profiles = store.list(); notice = "افزوده شد: ${result.added} | تکراری: ${result.duplicates}" } } catch (e: Exception) { notice = "خطا در دریافت اشتراک: ${e.message}" } finally { refreshing = false } } } })
                     AuraTab.ROUTING -> RoutingScreen(onNotice = { notice = it })
                     AuraTab.SETTINGS -> SettingsScreen(onNotice = { notice = it })
