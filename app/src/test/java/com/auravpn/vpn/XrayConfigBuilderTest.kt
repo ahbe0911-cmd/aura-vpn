@@ -4,6 +4,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class XrayConfigBuilderTest {
+    @Test fun createsVmessWebSocketTlsOutbound() {
+        val payload = """{"v":"2","ps":"My VMess","add":"edge.example.com","port":"443","id":"b831381d-6324-4d53-ad4f-8cda48b30811","aid":"0","scy":"auto","net":"ws","host":"cdn.example.com","path":"/ray","tls":"tls","sni":"edge.example.com"}"""
+        val encoded = java.util.Base64.getEncoder().encodeToString(payload.toByteArray())
+        val result = XrayConfigBuilder.fromShareLink("vmess://$encoded")
+        assertTrue(result.toString(), result is EngineConfigResult.Ready)
+        val outbound = org.json.JSONObject((result as EngineConfigResult.Ready).json)
+            .getJSONArray("outbounds").getJSONObject(0)
+        assertEquals("vmess", outbound.getString("protocol"))
+        assertEquals("ws", outbound.getJSONObject("streamSettings").getString("network"))
+        assertEquals("/ray", outbound.getJSONObject("streamSettings").getJSONObject("wsSettings").getString("path"))
+    }
+
+    @Test fun rejectsVmessUnsupportedTransport() {
+        val payload = """{"add":"edge.example.com","port":"443","id":"b831381d-6324-4d53-ad4f-8cda48b30811","net":"grpc","tls":"tls"}"""
+        val encoded = java.util.Base64.getEncoder().encodeToString(payload.toByteArray())
+        val result = XrayConfigBuilder.fromShareLink("vmess://$encoded")
+        assertTrue(result is EngineConfigResult.Unsupported)
+    }
+
     @Test fun createsTrojanTlsOutbound() {
         val result = XrayConfigBuilder.fromShareLink("trojan://password@example.com:443?security=tls&sni=example.com")
         assertTrue(result is EngineConfigResult.Ready)

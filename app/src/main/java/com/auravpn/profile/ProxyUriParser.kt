@@ -67,9 +67,25 @@ object ProxyUriParser {
             if (!decoded.trim().startsWith("{") || !decoded.trim().endsWith("}")) {
                 return ProfileParseResult.Failure("VMess payload must be a JSON object")
             }
-            // Keep the payload opaque until the dedicated JSON schema validator is added.
+            val json = org.json.JSONObject(decoded)
+            val host = json.optString("add").takeIf { it.isNotBlank() }
+                ?: return ProfileParseResult.Failure("VMess server address is missing")
+            val port = json.optString("port").toIntOrNull()?.takeIf { it in 1..65535 }
+                ?: return ProfileParseResult.Failure("VMess server port is invalid")
+            val id = json.optString("id").takeIf { it.isNotBlank() }
+                ?: return ProfileParseResult.Failure("VMess UUID is missing")
+            val network = json.optString("net", "tcp").ifBlank { "tcp" }.lowercase()
+            val tls = json.optString("tls").lowercase()
+            val query = buildMap {
+                put("type", network)
+                put("security", if (tls == "tls") "tls" else "none")
+                listOf("host", "path", "sni", "alpn", "fp").forEach { key ->
+                    json.optString(key).takeIf { it.isNotBlank() }?.let { put(key, it) }
+                }
+            }
+            val name = json.optString("ps").takeIf { it.isNotBlank() } ?: host
             ProfileParseResult.Success(
-                ParsedProfile(ProxyProtocol.VMESS, "VMess profile", raw = decoded)
+                ParsedProfile(ProxyProtocol.VMESS, name, host, port, id, query, decoded)
             )
         } catch (_: Exception) {
             ProfileParseResult.Failure("Invalid VMess Base64 payload")

@@ -26,7 +26,59 @@ object XrayConfigBuilder {
         return fromProfile(parsed.profile)
     }
 
+    private fun fromVmess(profile: ParsedProfile): EngineConfigResult {
+        return try {
+            val vmess = JSONObject(profile.raw)
+            val host = profile.host ?: return EngineConfigResult.Unsupported("VMess server address is missing")
+            val port = profile.port?.takeIf { it in 1..65535 }
+                ?: return EngineConfigResult.Unsupported("VMess server port is invalid")
+            val id = profile.userInfo?.takeIf { it.isNotBlank() }
+                ?: return EngineConfigResult.Unsupported("VMess UUID is missing")
+            try { java.util.UUID.fromString(id) } catch (_: Exception) {
+                return EngineConfigResult.Unsupported("Invalid VMess UUID")
+            }
+            val alterId = vmess.optString("aid", "0").toIntOrNull()?.takeIf { it >= 0 }
+                ?: return EngineConfigResult.Unsupported("Invalid VMess alterId")
+            val cipher = vmess.optString("scy", "auto").ifBlank { "auto" }
+            if (cipher !in setOf("auto", "none", "zero", "aes-128-gcm", "chacha20-poly1305")) {
+                return EngineConfigResult.Unsupported("Unsupported VMess cipher: $cipher")
+            }
+            val network = profile.query["type"] ?: "tcp"
+            if (network !in setOf("tcp", "ws")) {
+                return EngineConfigResult.Unsupported("VMess transport $network is not supported yet")
+            }
+            val security = profile.query["security"] ?: "none"
+            if (security !in setOf("none", "tls")) {
+                return EngineConfigResult.Unsupported("VMess security $security is not supported yet")
+            }
+            if (!profile.query["fp"].isNullOrBlank() || !profile.query["alpn"].isNullOrBlank()) {
+                return EngineConfigResult.Unsupported("VMess fingerprint/custom ALPN needs a separate adapter")
+            }
+            val user = JSONObject().put("id", id).put("alterId", alterId).put("security", cipher)
+            val server = JSONObject().put("address", host).put("port", port)
+                .put("users", JSONArray().put(user))
+            val settings = JSONObject().put("vnext", JSONArray().put(server))
+            val stream = JSONObject().put("network", network).put("security", security)
+            if (network == "ws") {
+                val ws = JSONObject().put("path", profile.query["path"] ?: "/")
+                profile.query["host"]?.takeIf { it.isNotBlank() }?.let {
+                    ws.put("headers", JSONObject().put("Host", it))
+                }
+                stream.put("wsSettings", ws)
+            }
+            if (security == "tls") {
+                stream.put("tlsSettings", JSONObject().put("serverName", profile.query["sni"] ?: host))
+            }
+            val outbound = JSONObject().put("tag", "proxy").put("protocol", "vmess")
+                .put("settings", settings).put("streamSettings", stream)
+            EngineConfigResult.Ready(JSONObject().put("outbounds", JSONArray().put(outbound)).toString())
+        } catch (e: Exception) {
+            EngineConfigResult.Unsupported("Malformed VMess configuration: ${e.message ?: "invalid JSON"}")
+        }
+    }
+
     fun fromProfile(profile: ParsedProfile): EngineConfigResult {
+        if (profile.protocol == ProxyProtocol.VMESS) return fromVmess(profile)
         if (profile.protocol !in setOf(ProxyProtocol.VLESS, ProxyProtocol.TROJAN)) {
             return EngineConfigResult.Unsupported("This protocol needs a separate adapter")
         }
