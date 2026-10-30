@@ -77,8 +77,45 @@ object XrayConfigBuilder {
         }
     }
 
+    private fun fromShadowsocks(profile: ParsedProfile): EngineConfigResult {
+        val host = profile.host?.takeIf { it.isNotBlank() }
+            ?: return EngineConfigResult.Unsupported("Shadowsocks server address is missing")
+        val port = profile.port?.takeIf { it in 1..65535 }
+            ?: return EngineConfigResult.Unsupported("Shadowsocks server port is invalid")
+        val credentials = profile.userInfo?.split(':', limit = 2)
+            ?: return EngineConfigResult.Unsupported("Shadowsocks credentials are missing")
+        if (credentials.size != 2 || credentials[0].isBlank() || credentials[1].isBlank()) {
+            return EngineConfigResult.Unsupported("Shadowsocks credentials must be method:password")
+        }
+        val method = credentials[0].lowercase()
+        val supportedMethods = setOf(
+            "aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305",
+            "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm"
+        )
+        if (method !in supportedMethods) {
+            return EngineConfigResult.Unsupported("Unsupported Shadowsocks cipher: $method")
+        }
+        if (profile.query.keys.any { it != "plugin" }) {
+            return EngineConfigResult.Unsupported("Unknown Shadowsocks options")
+        }
+        if (!profile.query["plugin"].isNullOrBlank()) {
+            return EngineConfigResult.Unsupported("Shadowsocks SIP003 plugins are not supported yet")
+        }
+        val server = JSONObject()
+            .put("address", host)
+            .put("port", port)
+            .put("method", method)
+            .put("password", credentials[1])
+        val outbound = JSONObject()
+            .put("tag", "proxy")
+            .put("protocol", "shadowsocks")
+            .put("settings", JSONObject().put("servers", JSONArray().put(server)))
+        return EngineConfigResult.Ready(JSONObject().put("outbounds", JSONArray().put(outbound)).toString())
+    }
+
     fun fromProfile(profile: ParsedProfile): EngineConfigResult {
         if (profile.protocol == ProxyProtocol.VMESS) return fromVmess(profile)
+        if (profile.protocol == ProxyProtocol.SHADOWSOCKS) return fromShadowsocks(profile)
         if (profile.protocol !in setOf(ProxyProtocol.VLESS, ProxyProtocol.TROJAN)) {
             return EngineConfigResult.Unsupported("This protocol needs a separate adapter")
         }

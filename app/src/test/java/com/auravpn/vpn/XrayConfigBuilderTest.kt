@@ -23,6 +23,22 @@ class XrayConfigBuilderTest {
         assertTrue(result is EngineConfigResult.Unsupported)
     }
 
+    @Test fun createsShadowsocksOutbound() {
+        val result = XrayConfigBuilder.fromShareLink("ss://YWVzLTI1Ni1nY206cGFzc3dvcmQ@example.com:8388#Home")
+        assertTrue(result.toString(), result is EngineConfigResult.Ready)
+        val outbound = org.json.JSONObject((result as EngineConfigResult.Ready).json)
+            .getJSONArray("outbounds").getJSONObject(0)
+        assertEquals("shadowsocks", outbound.getString("protocol"))
+        val server = outbound.getJSONObject("settings").getJSONArray("servers").getJSONObject(0)
+        assertEquals("aes-256-gcm", server.getString("method"))
+        assertEquals("password", server.getString("password"))
+    }
+
+    @Test fun rejectsUnsupportedShadowsocksCipher() {
+        val result = XrayConfigBuilder.fromShareLink("ss://bWV0aG9kOnBhc3N3b3Jk@example.com:8388")
+        assertTrue(result is EngineConfigResult.Unsupported)
+    }
+
     @Test fun createsTrojanTlsOutbound() {
         val result = XrayConfigBuilder.fromShareLink("trojan://password@example.com:443?security=tls&sni=example.com")
         assertTrue(result is EngineConfigResult.Ready)
