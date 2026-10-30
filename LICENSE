@@ -1,0 +1,6 @@
+SPDX-License-Identifier: GPL-3.0-or-later
+
+AURA VPN is intended to be distributed under GNU General Public License v3.0 or later, subject to the dependency and native-core license compatibility audit.
+
+The complete license text must be included before the first public binary release:
+https://www.gnu.org/licenses/gpl-3.0.txt
