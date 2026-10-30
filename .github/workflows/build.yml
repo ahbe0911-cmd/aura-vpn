@@ -24,7 +24,7 @@ jobs:
         run: gradle :app:testDebugUnitTest --no-daemon
       - name: Assemble debug APK
         run: gradle :app:assembleDebug --no-daemon
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: aura-vpn-debug-${{ github.sha }}
           path: app/build/outputs/apk/debug/*.apk
