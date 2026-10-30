@@ -3,6 +3,8 @@ package com.auravpn
 import android.os.Bundle
 import android.app.Activity
 import android.net.VpnService
+import com.auravpn.vpn.XrayConfigBuilder
+import com.auravpn.vpn.EngineConfigResult
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
@@ -124,11 +126,17 @@ private fun AuraRoot() {
                             notice = "ابتدا از بخش سرورها یک پروفایل انتخاب کنید."
                             selectedTab = AuraTab.SERVERS
                         } else {
-                            val permissionIntent = VpnService.prepare(context)
-                            if (permissionIntent != null) vpnPermissionLauncher.launch(permissionIntent)
-                            else {
-                                vpnPermissionGranted = true
-                                notice = "مجوز VPN آماده است؛ اتصال واقعی هنوز پیاده‌سازی نشده است."
+                            val profile = store.selected()
+                            val validation = XrayConfigBuilder.fromShareLink(profile!!.source)
+                            if (validation is EngineConfigResult.Unsupported) {
+                                notice = "کانفیگ برای هسته فعلی آماده نیست: ${validation.reason}"
+                            } else {
+                                val permissionIntent = VpnService.prepare(context)
+                                if (permissionIntent != null) vpnPermissionLauncher.launch(permissionIntent)
+                                else {
+                                    vpnPermissionGranted = true
+                                    notice = "کانفیگ اولیه معتبر و مجوز آماده است؛ موتور Xray هنوز متصل نشده است."
+                                }
                             }
                         }
                     }, onServers = { selectedTab = AuraTab.SERVERS })
