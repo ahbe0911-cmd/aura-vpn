@@ -30,6 +30,12 @@ import androidx.compose.ui.unit.sp
 import com.auravpn.ui.theme.AuraColors
 import com.auravpn.ui.theme.AuraTheme
 import com.auravpn.ui.ProfileImportDialog
+import com.auravpn.ui.SubscriptionDialog
+import com.auravpn.profile.SubscriptionRepository
+import com.auravpn.profile.SavedSubscription
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import com.auravpn.profile.ProfileStore
 import com.auravpn.profile.StoredProfile
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +59,11 @@ private fun AuraRoot() {
     var selectedTab by remember { mutableStateOf(AuraTab.HOME) }
     val context = LocalContext.current
     val store = remember { ProfileStore(context) }
+    val subscriptions = remember { SubscriptionRepository(context) }
+    var sources by remember { mutableStateOf(subscriptions.list()) }
+    var showSubscriptionDialog by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var profiles by remember { mutableStateOf(store.list()) }
     var selectedProfileId by remember { mutableStateOf(store.selectedId()) }
     var showImport by remember { mutableStateOf(false) }
@@ -64,6 +75,15 @@ private fun AuraRoot() {
             snackbar.showSnackbar(it)
             notice = null
         }
+    }
+
+    if (showSubscriptionDialog) {
+        SubscriptionDialog(onDismiss = { showSubscriptionDialog = false }, onSave = { url, name ->
+            val added = subscriptions.add(url, name)
+            sources = subscriptions.list()
+            showSubscriptionDialog = false
+            notice = if (added) "اشتراک ذخیره شد" else "آدرس نامعتبر یا تکراری است"
+        })
     }
 
     if (showImport) {
@@ -91,7 +111,7 @@ private fun AuraRoot() {
             ) {
                 when (selectedTab) {
                     AuraTab.HOME -> HomeScreen(onConnect = { notice = "اتصال واقعی در فاز هسته VPN پیاده‌سازی می‌شود." }, onServers = { selectedTab = AuraTab.SERVERS })
-                    AuraTab.SERVERS -> ServersScreen(profiles = profiles, selectedId = selectedProfileId, onSelect = { id -> if (store.select(id)) { selectedProfileId = id; notice = "سرور انتخاب شد؛ اتصال VPN هنوز فعال نیست." } }, onImport = { showImport = true }, onDelete = { id -> store.delete(id); profiles = store.list(); selectedProfileId = store.selectedId() })
+                    AuraTab.SERVERS -> ServersScreen(profiles = profiles, selectedId = selectedProfileId, onSelect = { id -> if (store.select(id)) { selectedProfileId = id; notice = "سرور انتخاب شد؛ اتصال VPN هنوز فعال نیست." } }, onImport = { showImport = true }, onDelete = { id -> store.delete(id); profiles = store.list(); selectedProfileId = store.selectedId() }, sources = sources, refreshing = refreshing, onAddSource = { showSubscriptionDialog = true }, onRemoveSource = { url -> subscriptions.remove(url); sources = subscriptions.list() }, onRefreshSource = { url -> if (!refreshing) { refreshing = true; scope.launch { try { val content = withContext(Dispatchers.IO) { subscriptions.fetch(url) }; val result = withContext(Dispatchers.IO) { store.import(content) }; if (result.error != null) notice = result.error else { subscriptions.markUpdated(url); sources = subscriptions.list(); profiles = store.list(); notice = "افزوده شد: ${result.added} | تکراری: ${result.duplicates}" } } catch (e: Exception) { notice = "خطا در دریافت اشتراک: ${e.message}" } finally { refreshing = false } } } })
                     AuraTab.ROUTING -> RoutingScreen(onNotice = { notice = it })
                     AuraTab.SETTINGS -> SettingsScreen(onNotice = { notice = it })
                 }
@@ -240,7 +260,7 @@ private fun MetricCard(title: String, value: String, icon: ImageVector, modifier
 }
 
 @Composable
-private fun ServersScreen(profiles: List<StoredProfile>, selectedId: String?, onSelect: (String) -> Unit, onImport: () -> Unit, onDelete: (String) -> Unit) {
+private fun ServersScreen(profiles: List<StoredProfile>, selectedId: String?, onSelect: (String) -> Unit, onImport: () -> Unit, onDelete: (String) -> Unit, sources: List<SavedSubscription>, refreshing: Boolean, onAddSource: () -> Unit, onRemoveSource: (String) -> Unit, onRefreshSource: (String) -> Unit) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         AuraHeader("سرورها", "مدیریت پروفایل‌ها و اشتراک‌ها")
         OutlinedTextField(
@@ -257,6 +277,19 @@ private fun ServersScreen(profiles: List<StoredProfile>, selectedId: String?, on
                 unfocusedContainerColor = AuraColors.Surface
             )
         )
+        Button(onClick = onAddSource) { Text("افزودن لینک اشتراک") }
+        sources.forEach { source ->
+            Surface(color = AuraColors.Surface, shape = RoundedCornerShape(16.dp)) {
+                Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(source.name, color = AuraColors.TextPrimary)
+                        Text(if (source.lastUpdated > 0) "آخرین دریافت: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(source.lastUpdated)) else "هنوز دریافت نشده", color = AuraColors.TextSecondary, fontSize = 11.sp)
+                    }
+                    TextButton(onClick = { onRefreshSource(source.url) }, enabled = !refreshing) { Text("به‌روزرسانی") }
+                    IconButton(onClick = { onRemoveSource(source.url) }) { Icon(Icons.Filled.Delete, contentDescription = "حذف اشتراک", tint = AuraColors.Error) }
+                }
+            }
+        }
         if (profiles.isNotEmpty()) {
             profiles.forEach { profile ->
                 Surface(color = AuraColors.Surface, shape = RoundedCornerShape(16.dp)) {
