@@ -22,9 +22,7 @@ jobs:
       - name: Fetch pinned Android Xray core AAR
         run: |
           mkdir -p app/libs
-          curl --fail --location --retry 3 \\
-            https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.10.29/libv2ray.aar \\
-            --output app/libs/libv2ray.aar
+          curl --fail --location --retry 3 --output app/libs/libv2ray.aar https://github.com/2dust/AndroidLibXrayLite/releases/download/v26.10.29/libv2ray.aar
           echo "64fc529302dce728bde859f45d87a64f7289a5fbcca8ef962aae3d94c6e3fa82  app/libs/libv2ray.aar" | sha256sum --check
       # GitHub-hosted Android runners already include the Android SDK.
       - name: Verify Android SDK
