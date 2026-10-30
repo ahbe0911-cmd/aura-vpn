@@ -23,8 +23,8 @@ class ProfileStore(context: Context) {
     }
 
     @Synchronized
-    fun import(text: String): ImportSummary {
-        val parsed = SubscriptionParser.parse(text)
+    fun import(text: String, headers: Map<String, String> = emptyMap()): ImportSummary {
+        val parsed = SubscriptionParser.parse(text, headers)
         if (parsed !is SubscriptionParseResult.Success) {
             return ImportSummary(0, 0, (parsed as SubscriptionParseResult.Failure).reason)
         }

@@ -18,6 +18,16 @@ class SubscriptionParserTest {
         assertTrue(result is SubscriptionParseResult.Success)
     }
 
+    @Test fun importsVmessSubscriptionNodeWithDecodedEndpoint() {
+        val payload = """{"v":"2","ps":"VMess Node","add":"vmess.example.com","port":"443","id":"b831381d-6324-4d53-ad4f-8cda48b30811","aid":"0","net":"ws","path":"/ray","tls":"tls"}"""
+        val link = "vmess://" + Base64.getEncoder().encodeToString(payload.toByteArray())
+        val result = SubscriptionParser.parse(link) as SubscriptionParseResult.Success
+        assertEquals(1, result.value.nodes.size)
+        assertEquals("VMess Node", result.value.nodes.first().name)
+        assertEquals("vmess.example.com", result.value.nodes.first().server)
+        assertEquals(443, result.value.nodes.first().port)
+    }
+
     @Test fun readsSubscriptionHeaders() {
         val result = SubscriptionParser.parse(
             "vless://id@example.com:443",

@@ -39,29 +39,58 @@ class SubscriptionRepository(context: Context) {
     }
 
     /** Network operations must be called from a background dispatcher. */
-    fun fetch(url: String): String {
+    fun fetch(url: String): String = fetchResult(url).content
+
+    fun fetchResult(url: String): SubscriptionFetchResult {
         require(url.startsWith("https://", ignoreCase = true)) { "Only HTTPS subscriptions are supported" }
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 10000
-        connection.readTimeout = 15000
-        connection.instanceFollowRedirects = false
-        try {
-            require(connection.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${connection.responseCode}" }
-            val declaredLength = connection.contentLengthLong
-            require(declaredLength < 0 || declaredLength <= 1024 * 1024) { "Subscription too large" }
-            return connection.inputStream.use { stream ->
-                val out = java.io.ByteArrayOutputStream()
-                val buffer = ByteArray(8192)
-                while (true) {
-                    val n = stream.read(buffer)
-                    if (n < 0) break
-                    require(out.size() + n <= 1024 * 1024) { "Subscription too large" }
-                    out.write(buffer, 0, n)
+        var current = URL(url)
+        repeat(4) { redirectCount ->
+            require(current.protocol.equals("https", ignoreCase = true)) { "Insecure subscription redirect rejected" }
+            val connection = current.openConnection() as HttpURLConnection
+            connection.connectTimeout = 10000
+            connection.readTimeout = 15000
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("User-Agent", "AURA-VPN/0.1")
+            connection.setRequestProperty("Accept", "text/plain, application/json, application/yaml, */*")
+            try {
+                val code = connection.responseCode
+                if (code in setOf(301, 302, 303, 307, 308)) {
+                    val location = connection.getHeaderField("Location")
+                        ?: throw IllegalArgumentException("Subscription redirect has no destination")
+                    require(redirectCount < 3) { "Too many subscription redirects" }
+                    val next = URL(current, location)
+                    require(next.protocol.equals("https", ignoreCase = true)) { "Insecure subscription redirect rejected" }
+                    current = next
+                } else {
+                    require(code == HttpURLConnection.HTTP_OK) { "HTTP $code" }
+                    val declaredLength = connection.contentLengthLong
+                    require(declaredLength < 0 || declaredLength <= 1024 * 1024) { "Subscription too large" }
+                    val body = connection.inputStream.use { stream ->
+                        val out = java.io.ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val n = stream.read(buffer)
+                            if (n < 0) break
+                            require(out.size() + n <= 1024 * 1024) { "Subscription too large" }
+                            out.write(buffer, 0, n)
+                        }
+                        out.toString(Charsets.UTF_8.name())
+                    }
+                    val headers = connection.headerFields.entries
+                        .filter { it.key != null && !it.value.isNullOrEmpty() }
+                        .associate { it.key to it.value.first() }
+                    return SubscriptionFetchResult(body, headers, current.toString())
                 }
-                out.toString(Charsets.UTF_8.name())
+            } finally {
+                connection.disconnect()
             }
-        } finally {
-            connection.disconnect()
         }
+        throw IllegalArgumentException("Too many subscription redirects")
     }
 }
+
+data class SubscriptionFetchResult(
+    val content: String,
+    val headers: Map<String, String>,
+    val finalUrl: String
+)
