@@ -17,6 +17,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -124,7 +126,7 @@ private fun AuraRoot() {
                     .padding(padding)
             ) {
                 when (selectedTab) {
-                    AuraTab.HOME -> HomeScreen(onConnect = {
+                    AuraTab.HOME -> HomeScreen(selectedProfileName = store.selected()?.name, onConnect = {
                         if (store.selected() == null) {
                             notice = "ابتدا از بخش سرورها یک پروفایل انتخاب کنید."
                             selectedTab = AuraTab.SERVERS
@@ -170,7 +172,7 @@ private fun AuraHeader(title: String, subtitle: String? = null, action: (@Compos
 }
 
 @Composable
-private fun HomeScreen(onConnect: () -> Unit, onServers: () -> Unit) {
+private fun HomeScreen(selectedProfileName: String?, onConnect: () -> Unit, onServers: () -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 24.dp),
@@ -230,7 +232,7 @@ private fun HomeScreen(onConnect: () -> Unit, onServers: () -> Unit) {
             }
         }
         item {
-            ServerCard(onClick = onServers)
+            ServerCard(profileName = selectedProfileName, onClick = onServers)
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -258,7 +260,7 @@ private fun HomeScreen(onConnect: () -> Unit, onServers: () -> Unit) {
 }
 
 @Composable
-private fun ServerCard(onClick: () -> Unit) {
+private fun ServerCard(profileName: String?, onClick: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         color = AuraColors.Surface,
@@ -271,8 +273,8 @@ private fun ServerCard(onClick: () -> Unit) {
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("سرور انتخاب نشده", color = AuraColors.TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text("برای افزودن سرور وارد فهرست سرورها شوید", color = AuraColors.TextSecondary, fontSize = 11.sp)
+                Text(profileName ?: "سرور انتخاب نشده", color = AuraColors.TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(if (profileName == null) "برای افزودن سرور وارد فهرست سرورها شوید" else "پروفایل انتخاب شده؛ موتور اتصال هنوز آماده نیست", color = AuraColors.TextSecondary, fontSize = 11.sp)
             }
             Icon(Icons.Filled.ChevronLeft, contentDescription = "مشاهده سرورها", tint = AuraColors.TextSecondary)
         }
@@ -295,7 +297,10 @@ private fun MetricCard(title: String, value: String, icon: ImageVector, modifier
 
 @Composable
 private fun ServersScreen(profiles: List<StoredProfile>, selectedId: String?, onSelect: (String) -> Unit, onImport: () -> Unit, onDelete: (String) -> Unit, sources: List<SavedSubscription>, refreshing: Boolean, onAddSource: () -> Unit, onRemoveSource: (String) -> Unit, onRefreshSource: (String) -> Unit) {
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
         AuraHeader("سرورها", "مدیریت پروفایل‌ها و اشتراک‌ها")
         OutlinedTextField(
             value = "",
