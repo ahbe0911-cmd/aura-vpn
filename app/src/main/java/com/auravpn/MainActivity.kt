@@ -5,6 +5,9 @@ import android.app.Activity
 import android.net.VpnService
 import com.auravpn.vpn.XrayConfigBuilder
 import com.auravpn.vpn.EngineConfigResult
+import com.auravpn.vpn.EngineConnectionGate
+import com.auravpn.vpn.EngineStartResult
+import com.auravpn.vpn.NativeXrayRuntime
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
@@ -130,6 +133,8 @@ private fun AuraRoot() {
                             val validation = XrayConfigBuilder.fromShareLink(profile!!.source)
                             if (validation is EngineConfigResult.Unsupported) {
                                 notice = "کانفیگ برای هسته فعلی آماده نیست: ${validation.reason}"
+                            } else if (EngineConnectionGate.canStart(validation, NativeXrayRuntime(context).availability()) is EngineStartResult.Failed) {
+                                notice = "هسته اجرایی Xray هنوز در APK موجود نیست؛ اتصال برقرار نشد."
                             } else {
                                 val permissionIntent = VpnService.prepare(context)
                                 if (permissionIntent != null) vpnPermissionLauncher.launch(permissionIntent)
