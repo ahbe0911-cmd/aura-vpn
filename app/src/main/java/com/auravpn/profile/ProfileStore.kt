@@ -43,9 +43,20 @@ class ProfileStore(context: Context) {
         return ImportSummary(added, duplicates, null)
     }
 
+    fun selectedId(): String? = prefs.getString("selected_id", null)
+
+    @Synchronized
+    fun select(id: String): Boolean {
+        if (list().none { it.id == id }) return false
+        return prefs.edit().putString("selected_id", id).commit()
+    }
+
+    fun selected(): StoredProfile? = list().firstOrNull { it.id == selectedId() }
+
     @Synchronized
     fun delete(id: String) {
         persist(list().filterNot { it.id == id })
+        if (selectedId() == id) prefs.edit().remove("selected_id").commit()
     }
 
     private fun persist(items: List<StoredProfile>) {

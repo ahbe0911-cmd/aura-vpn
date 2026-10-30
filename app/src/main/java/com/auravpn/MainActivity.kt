@@ -54,6 +54,7 @@ private fun AuraRoot() {
     val context = LocalContext.current
     val store = remember { ProfileStore(context) }
     var profiles by remember { mutableStateOf(store.list()) }
+    var selectedProfileId by remember { mutableStateOf(store.selectedId()) }
     var showImport by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -90,7 +91,7 @@ private fun AuraRoot() {
             ) {
                 when (selectedTab) {
                     AuraTab.HOME -> HomeScreen(onConnect = { notice = "اتصال واقعی در فاز هسته VPN پیاده‌سازی می‌شود." }, onServers = { selectedTab = AuraTab.SERVERS })
-                    AuraTab.SERVERS -> ServersScreen(profiles = profiles, onImport = { showImport = true }, onDelete = { id -> store.delete(id); profiles = store.list() })
+                    AuraTab.SERVERS -> ServersScreen(profiles = profiles, selectedId = selectedProfileId, onSelect = { id -> if (store.select(id)) { selectedProfileId = id; notice = "سرور انتخاب شد؛ اتصال VPN هنوز فعال نیست." } }, onImport = { showImport = true }, onDelete = { id -> store.delete(id); profiles = store.list(); selectedProfileId = store.selectedId() })
                     AuraTab.ROUTING -> RoutingScreen(onNotice = { notice = it })
                     AuraTab.SETTINGS -> SettingsScreen(onNotice = { notice = it })
                 }
@@ -239,7 +240,7 @@ private fun MetricCard(title: String, value: String, icon: ImageVector, modifier
 }
 
 @Composable
-private fun ServersScreen(profiles: List<StoredProfile>, onImport: () -> Unit, onDelete: (String) -> Unit) {
+private fun ServersScreen(profiles: List<StoredProfile>, selectedId: String?, onSelect: (String) -> Unit, onImport: () -> Unit, onDelete: (String) -> Unit) {
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         AuraHeader("سرورها", "مدیریت پروفایل‌ها و اشتراک‌ها")
         OutlinedTextField(
@@ -263,6 +264,9 @@ private fun ServersScreen(profiles: List<StoredProfile>, onImport: () -> Unit, o
                         Column(Modifier.weight(1f)) {
                             Text(profile.name, color = AuraColors.TextPrimary)
                             Text(profile.protocol.uppercase(), color = AuraColors.TextSecondary, fontSize = 11.sp)
+                        }
+                        TextButton(onClick = { onSelect(profile.id) }) {
+                            Text(if (selectedId == profile.id) "انتخاب‌شده ✓" else "انتخاب")
                         }
                         IconButton(onClick = { onDelete(profile.id) }) { Icon(Icons.Filled.Delete, contentDescription = "حذف پروفایل", tint = AuraColors.Error) }
                     }
