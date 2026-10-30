@@ -36,10 +36,21 @@ object XrayConfigBuilder {
         val secret = profile.userInfo?.takeIf { it.isNotBlank() }
             ?: return EngineConfigResult.Unsupported("Missing credentials")
         val transport = profile.query["type"] ?: "tcp"
-        if (transport != "tcp") return EngineConfigResult.Unsupported("Transport $transport is not supported yet")
+        if (transport !in setOf("tcp", "ws")) return EngineConfigResult.Unsupported("Transport $transport is not supported yet")
         val security = profile.query["security"] ?: "none"
         if (security !in setOf("none", "tls")) {
             return EngineConfigResult.Unsupported("Security $security is not supported yet")
+        }
+        val supportedParams = setOf("type", "security", "sni", "peer", "allowInsecure", "host", "path", "encryption", "flow", "alpn", "fp")
+        val unknownParams = profile.query.keys - supportedParams
+        if (unknownParams.isNotEmpty()) return EngineConfigResult.Unsupported("Unrecognized options: ${unknownParams.joinToString()}")
+        if (!profile.query["fp"].isNullOrBlank()) return EngineConfigResult.Unsupported("TLS fingerprint requires a separate adapter")
+        if (!profile.query["alpn"].isNullOrBlank()) return EngineConfigResult.Unsupported("Custom ALPN requires a separate adapter")
+        if (profile.protocol == ProxyProtocol.VLESS && profile.query["encryption"] !in setOf(null, "none")) {
+            return EngineConfigResult.Unsupported("Unsupported VLESS encryption")
+        }
+        if (transport == "tcp" && (profile.query["path"] != null || profile.query["host"] != null)) {
+            return EngineConfigResult.Unsupported("WebSocket options require type=ws")
         }
         val server = JSONObject().put("address", host).put("port", port)
         val settings = JSONObject()
@@ -60,7 +71,13 @@ object XrayConfigBuilder {
             }
             else -> return EngineConfigResult.Unsupported("Unsupported protocol")
         }
-        val stream = JSONObject().put("network", "tcp").put("security", security)
+        val stream = JSONObject().put("network", transport).put("security", security)
+        if (transport == "ws") {
+            val ws = JSONObject().put("path", profile.query["path"] ?: "/")
+            val wsHost = profile.query["host"]
+            if (!wsHost.isNullOrBlank()) ws.put("headers", JSONObject().put("Host", wsHost))
+            stream.put("wsSettings", ws)
+        }
         if (security == "tls") {
             val tls = JSONObject()
             val sni = profile.query["sni"] ?: profile.query["peer"] ?: host
