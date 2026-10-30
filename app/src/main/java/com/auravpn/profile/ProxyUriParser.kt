@@ -49,9 +49,7 @@ object ProxyUriParser {
                 ?: return ProfileParseResult.Failure("Missing or invalid port")
             val query = parseQuery(uri.rawQuery)
             val userInfo = uri.rawUserInfo?.let(::decode)
-            if (protocol == ProxyProtocol.SHADOWSOCKS && userInfo.isNullOrBlank()) {
-                return parseShadowsocks(raw)
-            }
+            if (protocol == ProxyProtocol.SHADOWSOCKS) return parseShadowsocks(raw)
             val name = uri.rawFragment?.let(::decode)?.takeIf { it.isNotBlank() } ?: host
             ProfileParseResult.Success(ParsedProfile(protocol, name, host, port, userInfo, query, raw))
         } catch (_: Exception) {
@@ -100,8 +98,10 @@ object ProxyUriParser {
             val host = uri.host ?: return ProfileParseResult.Failure("Invalid Shadowsocks host")
             val port = uri.port.takeIf { it in 1..65535 }
                 ?: return ProfileParseResult.Failure("Invalid Shadowsocks port")
-            val credentials = uri.rawUserInfo?.let(::decode)
+            val rawCredentials = uri.rawUserInfo
                 ?: return ProfileParseResult.Failure("Missing Shadowsocks credentials")
+            val decodedCredentials = decode(rawCredentials)
+            val credentials = if (decodedCredentials.contains(':')) decodedCredentials else decodeBase64(decodedCredentials)
             val name = raw.substringAfter('#', "").takeIf { it.isNotBlank() }?.let(::decode) ?: host
             ProfileParseResult.Success(
                 ParsedProfile(ProxyProtocol.SHADOWSOCKS, name, host, port, credentials, parseQuery(uri.rawQuery), raw)
